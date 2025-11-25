@@ -14,8 +14,7 @@ from rich.text import Text
 from textual.app import App, ComposeResult
 from textual.binding import Binding
 from textual.containers import Horizontal, Vertical
-from textual.widgets import Footer, Header, Static, Input
-from textual.widgets import RichLog
+from textual.widgets import Footer, Header, Input, RichLog, Static
 from transformers import GPT2LMHeadModel, GPT2TokenizerFast
 
 app = typer.Typer(
@@ -27,6 +26,7 @@ console = Console()
 # Document conversion support
 try:
     from markitdown import MarkItDown
+
     MARKITDOWN_AVAILABLE = True
 except ImportError:
     MARKITDOWN_AVAILABLE = False
@@ -55,7 +55,9 @@ def convert_to_markdown(file_path: Path, show_progress: bool = True) -> Optional
                 console=console,
                 transient=True,
             ) as progress:
-                progress.add_task(f"Converting {file_path.suffix} to markdown...", total=None)
+                progress.add_task(
+                    f"Converting {file_path.suffix} to markdown...", total=None
+                )
                 result = md.convert(str(file_path))
         else:
             result = md.convert(str(file_path))
@@ -63,7 +65,9 @@ def convert_to_markdown(file_path: Path, show_progress: bool = True) -> Optional
         return result.markdown
     except Exception as e:
         if show_progress:
-            console.print(f"[yellow]Warning:[/yellow] Failed to convert {file_path.suffix} file: {e}")
+            console.print(
+                f"[yellow]Warning:[/yellow] Failed to convert {file_path.suffix} file: {e}"
+            )
         return None
 
 
@@ -93,10 +97,10 @@ def aggregate_probs(probs: list[float], method: AggregationMethod) -> float:
         return float(np.max(arr))
     elif method == AggregationMethod.l2:
         # L2 norm normalized by count (RMS of values)
-        return float(np.sqrt(np.mean(arr ** 2)))
+        return float(np.sqrt(np.mean(arr**2)))
     elif method == AggregationMethod.rmse:
         # RMSE from 0 (same as L2 in this case, but conceptually different)
-        return float(np.sqrt(np.mean(arr ** 2)))
+        return float(np.sqrt(np.mean(arr**2)))
     elif method == AggregationMethod.median:
         return float(np.median(arr))
     else:
@@ -215,7 +219,9 @@ def calculate_burstiness(probs: list[float], window: int = 10) -> float:
     return float(np.std(local_perplexities))
 
 
-def get_token_char_spans(tokenizer: GPT2TokenizerFast, text: str) -> list[tuple[int, int, str]]:
+def get_token_char_spans(
+    tokenizer: GPT2TokenizerFast, text: str
+) -> list[tuple[int, int, str]]:
     """Get character spans for each token in the text.
 
     Returns list of (start_char, end_char, token_str) for each token.
@@ -224,8 +230,8 @@ def get_token_char_spans(tokenizer: GPT2TokenizerFast, text: str) -> list[tuple[
     """
     # Use tokenizer's offset mapping for accurate character positions
     encoding = tokenizer(text, add_special_tokens=False, return_offsets_mapping=True)
-    tokens = encoding['input_ids']
-    offsets = encoding['offset_mapping']
+    tokens = encoding["input_ids"]
+    offsets = encoding["offset_mapping"]
 
     spans = []
     for token_id, (start, end) in zip(tokens, offsets):
@@ -275,10 +281,12 @@ def analyze_document(
         # One token per batch (starting from token index 1, since 0 has no prob)
         for token_idx in range(1, len(token_spans)):
             char_start, char_end, _ = token_spans[token_idx]
-            batches.append((char_start, char_end, [token_idx - 1]))  # prob index = token_idx - 1
+            batches.append(
+                (char_start, char_end, [token_idx - 1])
+            )  # prob index = token_idx - 1
     else:
         # Sentence mode: group by sentences, then optionally chunk
-        original_lines = text.split('\n')
+        original_lines = text.split("\n")
         char_offset = 0
 
         for original_line in original_lines:
@@ -311,8 +319,12 @@ def analyze_document(
 
                         # Chunk if max_sentence_tokens is set
                         if max_sentence_tokens > 0:
-                            for i in range(0, len(sentence_token_indices), max_sentence_tokens):
-                                chunk_indices = sentence_token_indices[i:i + max_sentence_tokens]
+                            for i in range(
+                                0, len(sentence_token_indices), max_sentence_tokens
+                            ):
+                                chunk_indices = sentence_token_indices[
+                                    i : i + max_sentence_tokens
+                                ]
                                 # Get char range for this chunk
                                 first_tok = chunk_indices[0] + 1
                                 last_tok = chunk_indices[-1] + 1
@@ -320,7 +332,9 @@ def analyze_document(
                                 chunk_end = token_spans[last_tok][1]
                                 batches.append((chunk_start, chunk_end, chunk_indices))
                         else:
-                            batches.append((sentence_start, sentence_end, sentence_token_indices))
+                            batches.append(
+                                (sentence_start, sentence_end, sentence_token_indices)
+                            )
 
                     sentence_start_in_line += len(sentence) + len(trailing)
 
@@ -330,7 +344,7 @@ def analyze_document(
     current_line = Text()
     current_char = 0
     line_idx = 0
-    original_lines = text.split('\n')
+    original_lines = text.split("\n")
     line_boundaries = []
     pos = 0
     for line in original_lines:
@@ -341,8 +355,8 @@ def analyze_document(
     if mode == AnalysisMode.token and len(token_spans) > 0:
         first_char_start, first_char_end, _ = token_spans[0]
         first_token_text = text[first_char_start:first_char_end]
-        if '\n' in first_token_text:
-            parts = first_token_text.split('\n')
+        if "\n" in first_token_text:
+            parts = first_token_text.split("\n")
             for j, part in enumerate(parts):
                 if j > 0:
                     lines.append(current_line)
@@ -356,8 +370,8 @@ def analyze_document(
         # Add any gap text (whitespace between batches) - handle line breaks
         if char_start > current_char:
             gap_text = text[current_char:char_start]
-            if '\n' in gap_text:
-                parts = gap_text.split('\n')
+            if "\n" in gap_text:
+                parts = gap_text.split("\n")
                 for j, part in enumerate(parts):
                     if j > 0:
                         lines.append(current_line)
@@ -371,7 +385,9 @@ def analyze_document(
         batch_probs = [display_probs[i] for i in prob_indices]
         agg_prob = aggregate_probs(batch_probs, aggregation_method)
 
-        color = get_color_for_prob(agg_prob, threshold_yellow, threshold_red, threshold_purple)
+        color = get_color_for_prob(
+            agg_prob, threshold_yellow, threshold_red, threshold_purple
+        )
 
         # Count colors
         if "0,255,0" in color:
@@ -385,8 +401,8 @@ def analyze_document(
 
         # Add batch text with color, handling newlines
         batch_text = text[char_start:char_end]
-        if '\n' in batch_text:
-            parts = batch_text.split('\n')
+        if "\n" in batch_text:
+            parts = batch_text.split("\n")
             for j, part in enumerate(parts):
                 if j > 0:
                     lines.append(current_line)
@@ -400,8 +416,8 @@ def analyze_document(
     # Add any remaining text after last batch
     if current_char < len(text):
         remaining = text[current_char:]
-        if '\n' in remaining:
-            parts = remaining.split('\n')
+        if "\n" in remaining:
+            parts = remaining.split("\n")
             for j, part in enumerate(parts):
                 if j > 0:
                     lines.append(current_line)
@@ -421,12 +437,20 @@ def analyze_document(
     perplexity = calculate_perplexity(probs_for_metrics)
     burstiness = calculate_burstiness(probs_for_metrics)
     avg_prob = float(np.mean(probs_for_metrics)) if probs_for_metrics else 0.0
-    high_prob_ratio = sum(1 for p in probs_for_metrics if p > 0.1) / len(probs_for_metrics) if probs_for_metrics else 0.0
+    high_prob_ratio = (
+        sum(1 for p in probs_for_metrics if p > 0.1) / len(probs_for_metrics)
+        if probs_for_metrics
+        else 0.0
+    )
 
     # Calculate color percentages
     green_pct = color_counts["green"] / total_colored * 100 if total_colored > 0 else 0
-    yellow_pct = color_counts["yellow"] / total_colored * 100 if total_colored > 0 else 0
-    orange_pct = color_counts["orange"] / total_colored * 100 if total_colored > 0 else 0
+    yellow_pct = (
+        color_counts["yellow"] / total_colored * 100 if total_colored > 0 else 0
+    )
+    orange_pct = (
+        color_counts["orange"] / total_colored * 100 if total_colored > 0 else 0
+    )
     red_pct = color_counts["red"] / total_colored * 100 if total_colored > 0 else 0
 
     # Determine assessment
@@ -590,8 +614,17 @@ class FindLLMApp(App):
 
         with Vertical(id="content"):
             with Horizontal(id="search-container"):
-                yield Input(placeholder="Search (Enter to confirm, Esc to close)", id="search-input")
-            yield RichLog(id="text-view", highlight=True, markup=True, wrap=True, auto_scroll=False)
+                yield Input(
+                    placeholder="Search (Enter to confirm, Esc to close)",
+                    id="search-input",
+                )
+            yield RichLog(
+                id="text-view",
+                highlight=True,
+                markup=True,
+                wrap=True,
+                auto_scroll=False,
+            )
 
         yield Footer()
 
@@ -668,10 +701,15 @@ class FindLLMApp(App):
             if pos > last_end:
                 for start, end, style in line._spans:
                     if start < pos and end > last_end:
-                        result.append(line.plain[max(start, last_end):min(end, pos)], style=style)
+                        result.append(
+                            line.plain[max(start, last_end) : min(end, pos)],
+                            style=style,
+                        )
 
             # Add highlighted match
-            result.append(line.plain[pos:pos + len(self.search_term)], style="black on yellow")
+            result.append(
+                line.plain[pos : pos + len(self.search_term)], style="black on yellow"
+            )
 
             last_end = pos + len(self.search_term)
             idx = last_end
@@ -797,12 +835,16 @@ class FindLLMApp(App):
             summary_text.append(f"✗ {assessment}", style="bold red")
 
         # Show current mode and aggregation (only in sentence mode)
-        mode_str = "sentence" if self._analysis_mode == AnalysisMode.sentence else "token"
+        mode_str = (
+            "sentence" if self._analysis_mode == AnalysisMode.sentence else "token"
+        )
         if self._analysis_mode == AnalysisMode.sentence:
             agg_str = f"  │  Agg: {self._aggregation_method.value}"
         else:
             agg_str = ""
-        summary_text.append(f"  │  Mode: {mode_str}{agg_str}  │  Tokens: {r['total_tokens']}  │  ")
+        summary_text.append(
+            f"  │  Mode: {mode_str}{agg_str}  │  Tokens: {r['total_tokens']}  │  "
+        )
         summary_text.append(f"{cd['green_pct']:.0f}%", style="rgb(0,255,0)")
         summary_text.append("/")
         summary_text.append(f"{cd['yellow_pct']:.0f}%", style="rgb(255,255,0)")
@@ -871,15 +913,29 @@ def run_analysis(
         ) as progress:
             progress.add_task("Analyzing document...", total=None)
             results = analyze_document(
-                text, model, tokenizer, mode,
-                threshold_yellow, threshold_red, threshold_purple,
-                max_sentence_tokens, min_sentence_tokens, aggregation_method
+                text,
+                model,
+                tokenizer,
+                mode,
+                threshold_yellow,
+                threshold_red,
+                threshold_purple,
+                max_sentence_tokens,
+                min_sentence_tokens,
+                aggregation_method,
             )
     else:
         results = analyze_document(
-            text, model, tokenizer, mode,
-            threshold_yellow, threshold_red, threshold_purple,
-            max_sentence_tokens, min_sentence_tokens, aggregation_method
+            text,
+            model,
+            tokenizer,
+            mode,
+            threshold_yellow,
+            threshold_red,
+            threshold_purple,
+            max_sentence_tokens,
+            min_sentence_tokens,
+            aggregation_method,
         )
 
     return results, model, tokenizer
@@ -889,28 +945,45 @@ def run_analysis(
 def main(
     file: Annotated[Path, typer.Argument(help="Path to the text file to analyze")],
     mode: Annotated[
-        AnalysisMode, typer.Option("--mode", "-m", help="Analysis mode: token or sentence")
+        AnalysisMode,
+        typer.Option("--mode", "-m", help="Analysis mode: token or sentence"),
     ] = AnalysisMode.sentence,
     threshold_yellow: Annotated[
-        float, typer.Option("--threshold-yellow", help="Probability threshold for yellow")
+        float,
+        typer.Option("--threshold-yellow", help="Probability threshold for yellow"),
     ] = 0.38,
     threshold_red: Annotated[
         float, typer.Option("--threshold-red", help="Probability threshold for red")
     ] = 0.45,
     threshold_purple: Annotated[
-        float, typer.Option("--threshold-purple", help="Probability threshold for purple")
+        float,
+        typer.Option("--threshold-purple", help="Probability threshold for purple"),
     ] = 0.55,
     json_output: Annotated[
         bool, typer.Option("--json", "-j", help="Output results as JSON")
     ] = False,
     max_sentence_tokens: Annotated[
-        int, typer.Option("--max-sentence-tokens", "-c", help="Max tokens per chunk (0=full sentence/token)")
+        int,
+        typer.Option(
+            "--max-sentence-tokens",
+            "-c",
+            help="Max tokens per chunk (0=full sentence/token)",
+        ),
     ] = 0,
     min_sentence_tokens: Annotated[
-        int, typer.Option("--min-sentence-tokens", help="Min tokens per sentence (sentences with fewer tokens are skipped)")
+        int,
+        typer.Option(
+            "--min-sentence-tokens",
+            help="Min tokens per sentence (sentences with fewer tokens are skipped)",
+        ),
     ] = 3,
     aggregation_method: Annotated[
-        AggregationMethod, typer.Option("--aggregation", "-a", help="Aggregation method: mean, max, l2, rmse, median")
+        AggregationMethod,
+        typer.Option(
+            "--aggregation",
+            "-a",
+            help="Aggregation method: mean, max, l2, rmse, median",
+        ),
     ] = AggregationMethod.l2,
 ) -> None:
     """Analyze a text file for AI-generated content using GPT-2 prediction patterns.
@@ -927,7 +1000,7 @@ def main(
 
     # Try markitdown conversion for non-.md files if available
     text = None
-    if file.suffix.lower() != '.md' and MARKITDOWN_AVAILABLE:
+    if file.suffix.lower() != ".md" and MARKITDOWN_AVAILABLE:
         text = convert_to_markdown(file, show_progress=not json_output)
 
     # Fall back to reading as plain text if conversion failed or not attempted
@@ -950,9 +1023,15 @@ def main(
         raise typer.Exit(1)
 
     results, model, tokenizer = run_analysis(
-        text, mode,
-        threshold_yellow, threshold_red, threshold_purple,
-        json_output, max_sentence_tokens, min_sentence_tokens, aggregation_method
+        text,
+        mode,
+        threshold_yellow,
+        threshold_red,
+        threshold_purple,
+        json_output,
+        max_sentence_tokens,
+        min_sentence_tokens,
+        aggregation_method,
     )
 
     if json_output:
@@ -963,7 +1042,11 @@ def main(
         # Launch TUI
         tui = FindLLMApp(
             results,
-            {"yellow": threshold_yellow, "red": threshold_red, "purple": threshold_purple},
+            {
+                "yellow": threshold_yellow,
+                "red": threshold_red,
+                "purple": threshold_purple,
+            },
             text,
             model,
             tokenizer,
