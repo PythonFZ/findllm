@@ -1,6 +1,6 @@
 [project]
 name = "findllm"
-version = "0.1.0"
+version = "0.1.1"
 description = "Detect AI-generated text using GPT-2 token prediction analysis"
 readme = "README.md"
 requires-python = ">=3.11"
@@ -12,6 +12,9 @@ dependencies = [
     "transformers>=4.57.3",
     "typer>=0.20.0",
 ]
+
+[project.optional-dependencies]
+markitdown = ["markitdown[all]"]
 
 [project.scripts]
 findllm = "findllm:app"

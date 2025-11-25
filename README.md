@@ -7,15 +7,26 @@ https://github.com/user-attachments/assets/89d03001-7cef-4b9e-878d-c991bd520f18
 # Run directly with uv
 uvx findllm document.md
 
-# or install into your environment
+# With document conversion support (PDF, DOCX, PPTX, etc.)
+uvx --from 'findllm[markitdown]' findllm document.pdf
+
+# Or install into your environment
 pip install findllm
+
+# With document conversion support
+pip install 'findllm[markitdown]'
 ```
 
 ## Usage
 
 ```bash
-# Analyze a file (sentence mode by default)
+# Analyze a text file (sentence mode by default)
 findllm document.md
+
+# Analyze documents (PDF, DOCX, PPTX, XLSX, etc.) - requires markitdown extra
+findllm paper.pdf
+findllm presentation.pptx
+findllm report.docx
 
 # Use token-level analysis
 findllm document.md --mode token
@@ -23,12 +34,27 @@ findllm document.md --mode token
 # Chunk sentences into smaller batches (e.g., 10 tokens per chunk)
 findllm document.md --max-sentence-tokens 10
 
-# Use different aggregation methods (mean, max, l2, rmse, median)
+# Skip short sentences (e.g., less than 5 tokens, default is 3)
+findllm document.md --min-sentence-tokens 5
+
+# Use different aggregation methods (mean, max, l2, rmse, median, default is l2)
 findllm document.md --aggregation max
 
 # JSON output for programmatic use
 findllm document.md --json
 ```
+
+## Document Support
+
+With the `markitdown` extra installed, findllm can analyze various document formats:
+
+- **PDF** (.pdf)
+- **Microsoft Office** (.docx, .pptx, .xlsx)
+- **HTML** (.html, .htm)
+- **Rich Text** (.rtf)
+- **And more** - see [markitdown](https://github.com/microsoft/markitdown) for full format support
+
+Documents are automatically converted to markdown in-memory before analysis.
 
 ## How It Works
 

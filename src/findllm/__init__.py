@@ -2,7 +2,7 @@ import json
 import re
 from enum import Enum
 from pathlib import Path
-from typing import Annotated
+from typing import Annotated, Optional
 
 import numpy as np
 import torch
@@ -16,12 +16,55 @@ from textual.binding import Binding
 from textual.containers import Horizontal, Vertical
 from textual.widgets import Footer, Header, Static, Input
 from textual.widgets import RichLog
-from transformers import GPT2LMHeadModel, GPT2Tokenizer
+from transformers import GPT2LMHeadModel, GPT2TokenizerFast
 
 app = typer.Typer(
     help="Detect AI-generated text by analyzing token prediction patterns"
 )
 console = Console()
+
+
+# Document conversion support
+try:
+    from markitdown import MarkItDown
+    MARKITDOWN_AVAILABLE = True
+except ImportError:
+    MARKITDOWN_AVAILABLE = False
+
+
+def convert_to_markdown(file_path: Path, show_progress: bool = True) -> Optional[str]:
+    """Convert a document to markdown using markitdown.
+
+    Args:
+        file_path: Path to the file to convert
+        show_progress: Whether to show progress indicator
+
+    Returns:
+        Markdown text if conversion successful, None otherwise
+    """
+    if not MARKITDOWN_AVAILABLE:
+        return None
+
+    try:
+        md = MarkItDown()
+
+        if show_progress:
+            with Progress(
+                SpinnerColumn(),
+                TextColumn("[progress.description]{task.description}"),
+                console=console,
+                transient=True,
+            ) as progress:
+                progress.add_task(f"Converting {file_path.suffix} to markdown...", total=None)
+                result = md.convert(str(file_path))
+        else:
+            result = md.convert(str(file_path))
+
+        return result.markdown
+    except Exception as e:
+        if show_progress:
+            console.print(f"[yellow]Warning:[/yellow] Failed to convert {file_path.suffix} file: {e}")
+        return None
 
 
 class AnalysisMode(str, Enum):
@@ -107,7 +150,7 @@ def get_color_for_prob(
 
 def calculate_all_token_probs(
     model: GPT2LMHeadModel,
-    tokenizer: GPT2Tokenizer,
+    tokenizer: GPT2TokenizerFast,
     all_tokens: list[int],
 ) -> list[float]:
     """Calculate probability for each token, handling long sequences with chunking."""
@@ -172,26 +215,22 @@ def calculate_burstiness(probs: list[float], window: int = 10) -> float:
     return float(np.std(local_perplexities))
 
 
-def get_token_char_spans(tokenizer: GPT2Tokenizer, text: str) -> list[tuple[int, int, str]]:
+def get_token_char_spans(tokenizer: GPT2TokenizerFast, text: str) -> list[tuple[int, int, str]]:
     """Get character spans for each token in the text.
 
     Returns list of (start_char, end_char, token_str) for each token.
+    Uses tokenizer's offset mapping for accurate character positions,
+    especially important for multi-byte Unicode characters (emojis, special symbols).
     """
-    tokens = tokenizer.encode(text, add_special_tokens=False)
-    spans = []
-    current_pos = 0
+    # Use tokenizer's offset mapping for accurate character positions
+    encoding = tokenizer(text, add_special_tokens=False, return_offsets_mapping=True)
+    tokens = encoding['input_ids']
+    offsets = encoding['offset_mapping']
 
-    for token_id in tokens:
+    spans = []
+    for token_id, (start, end) in zip(tokens, offsets):
         token_str = tokenizer.decode([token_id])
-        # Find where this token appears in the remaining text
-        # Handle special characters and whitespace
-        start = text.find(token_str, current_pos)
-        if start == -1:
-            # Token might have been normalized, try character by character
-            start = current_pos
-        end = start + len(token_str)
         spans.append((start, end, token_str))
-        current_pos = end
 
     return spans
 
@@ -199,13 +238,14 @@ def get_token_char_spans(tokenizer: GPT2Tokenizer, text: str) -> list[tuple[int,
 def analyze_document(
     text: str,
     model: GPT2LMHeadModel,
-    tokenizer: GPT2Tokenizer,
+    tokenizer: GPT2TokenizerFast,
     mode: AnalysisMode,
     threshold_yellow: float,
     threshold_red: float,
     threshold_purple: float,
     max_sentence_tokens: int = 0,
-    aggregation_method: AggregationMethod = AggregationMethod.mean,
+    min_sentence_tokens: int = 3,
+    aggregation_method: AggregationMethod = AggregationMethod.l2,
 ) -> dict:
     """Analyze document and return results, preserving original line structure."""
     all_tokens = tokenizer.encode(text, add_special_tokens=False)
@@ -265,6 +305,10 @@ def analyze_document(
                                 sentence_token_indices.append(prob_idx)
 
                     if sentence_token_indices:
+                        # Skip sentences that are too short
+                        if len(sentence_token_indices) < min_sentence_tokens:
+                            continue
+
                         # Chunk if max_sentence_tokens is set
                         if max_sentence_tokens > 0:
                             for i in range(0, len(sentence_token_indices), max_sentence_tokens):
@@ -421,6 +465,7 @@ def analyze_document(
         "mode": mode.value,
         "aggregation_method": aggregation_method.value,
         "max_sentence_tokens": max_sentence_tokens,
+        "min_sentence_tokens": min_sentence_tokens,
         "total_tokens": total_tokens,
         "metrics": {
             "perplexity": perplexity,
@@ -517,9 +562,10 @@ class FindLLMApp(App):
         thresholds: dict,
         text: str,
         model: GPT2LMHeadModel,
-        tokenizer: GPT2Tokenizer,
+        tokenizer: GPT2TokenizerFast,
         max_sentence_tokens: int = 0,
-        aggregation_method: AggregationMethod = AggregationMethod.mean,
+        min_sentence_tokens: int = 3,
+        aggregation_method: AggregationMethod = AggregationMethod.l2,
     ):
         super().__init__()
         self.results = results
@@ -528,6 +574,7 @@ class FindLLMApp(App):
         self.model = model
         self.tokenizer = tokenizer
         self.max_sentence_tokens = max_sentence_tokens
+        self.min_sentence_tokens = min_sentence_tokens
         self._aggregation_method = aggregation_method
         self.show_line_numbers = False
         self.search_term = ""
@@ -686,6 +733,7 @@ class FindLLMApp(App):
             self.thresholds["red"],
             self.thresholds["purple"],
             self.max_sentence_tokens,
+            self.min_sentence_tokens,
             self._aggregation_method,
         )
         self.lines = self.results["lines"]
@@ -721,6 +769,7 @@ class FindLLMApp(App):
             self.thresholds["red"],
             self.thresholds["purple"],
             self.max_sentence_tokens,
+            self.min_sentence_tokens,
             self._aggregation_method,
         )
         self.lines = self.results["lines"]
@@ -789,12 +838,13 @@ def run_analysis(
     threshold_purple: float,
     json_output: bool,
     max_sentence_tokens: int = 0,
-    aggregation_method: AggregationMethod = AggregationMethod.mean,
-) -> tuple[dict, GPT2LMHeadModel, GPT2Tokenizer]:
+    min_sentence_tokens: int = 3,
+    aggregation_method: AggregationMethod = AggregationMethod.l2,
+) -> tuple[dict, GPT2LMHeadModel, GPT2TokenizerFast]:
     """Run the analysis and return results along with model/tokenizer for TUI."""
     # Load model
     if json_output:
-        tokenizer = GPT2Tokenizer.from_pretrained("gpt2")
+        tokenizer = GPT2TokenizerFast.from_pretrained("gpt2")
         tokenizer.model_max_length = int(1e30)
         model = GPT2LMHeadModel.from_pretrained("gpt2")
         model.eval()
@@ -806,7 +856,7 @@ def run_analysis(
             transient=True,
         ) as progress:
             progress.add_task("Loading GPT-2 model...", total=None)
-            tokenizer = GPT2Tokenizer.from_pretrained("gpt2")
+            tokenizer = GPT2TokenizerFast.from_pretrained("gpt2")
             tokenizer.model_max_length = int(1e30)
             model = GPT2LMHeadModel.from_pretrained("gpt2")
             model.eval()
@@ -823,13 +873,13 @@ def run_analysis(
             results = analyze_document(
                 text, model, tokenizer, mode,
                 threshold_yellow, threshold_red, threshold_purple,
-                max_sentence_tokens, aggregation_method
+                max_sentence_tokens, min_sentence_tokens, aggregation_method
             )
     else:
         results = analyze_document(
             text, model, tokenizer, mode,
             threshold_yellow, threshold_red, threshold_purple,
-            max_sentence_tokens, aggregation_method
+            max_sentence_tokens, min_sentence_tokens, aggregation_method
         )
 
     return results, model, tokenizer
@@ -856,11 +906,18 @@ def main(
     max_sentence_tokens: Annotated[
         int, typer.Option("--max-sentence-tokens", "-c", help="Max tokens per chunk (0=full sentence/token)")
     ] = 0,
+    min_sentence_tokens: Annotated[
+        int, typer.Option("--min-sentence-tokens", help="Min tokens per sentence (sentences with fewer tokens are skipped)")
+    ] = 3,
     aggregation_method: Annotated[
         AggregationMethod, typer.Option("--aggregation", "-a", help="Aggregation method: mean, max, l2, rmse, median")
-    ] = AggregationMethod.mean,
+    ] = AggregationMethod.l2,
 ) -> None:
-    """Analyze a text file for AI-generated content using GPT-2 prediction patterns."""
+    """Analyze a text file for AI-generated content using GPT-2 prediction patterns.
+
+    Supports plain text files and various document formats (PDF, DOCX, PPTX, etc.)
+    when installed with the 'markitdown' extra: pip install findllm[markitdown]
+    """
     if not file.exists():
         if json_output:
             print(json.dumps({"error": f"File '{file}' not found."}))
@@ -868,7 +925,23 @@ def main(
             console.print(f"[red]Error:[/red] File '{file}' not found.")
         raise typer.Exit(1)
 
-    text = file.read_text()
+    # Try markitdown conversion for non-.md files if available
+    text = None
+    if file.suffix.lower() != '.md' and MARKITDOWN_AVAILABLE:
+        text = convert_to_markdown(file, show_progress=not json_output)
+
+    # Fall back to reading as plain text if conversion failed or not attempted
+    if text is None:
+        try:
+            text = file.read_text()
+        except Exception as e:
+            error_msg = f"Failed to read '{file}': {e}"
+            if json_output:
+                print(json.dumps({"error": error_msg}))
+            else:
+                console.print(f"[red]Error:[/red] {error_msg}")
+            raise typer.Exit(1)
+
     if not text.strip():
         if json_output:
             print(json.dumps({"error": "File is empty."}))
@@ -879,7 +952,7 @@ def main(
     results, model, tokenizer = run_analysis(
         text, mode,
         threshold_yellow, threshold_red, threshold_purple,
-        json_output, max_sentence_tokens, aggregation_method
+        json_output, max_sentence_tokens, min_sentence_tokens, aggregation_method
     )
 
     if json_output:
@@ -895,6 +968,7 @@ def main(
             model,
             tokenizer,
             max_sentence_tokens,
+            min_sentence_tokens,
             aggregation_method,
         )
         tui.run()
