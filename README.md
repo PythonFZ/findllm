@@ -1,6 +1,5 @@
-# findllm
-
-Detect AI-generated text by analyzing token prediction patterns using GPT-2.
+# findllm - Detect AI-generated text by analyzing token prediction patterns using GPT-2.
+https://github.com/user-attachments/assets/89d03001-7cef-4b9e-878d-c991bd520f18
 
 ## Installation
 
