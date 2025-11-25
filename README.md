@@ -3,12 +3,17 @@ https://github.com/user-attachments/assets/89d03001-7cef-4b9e-878d-c991bd520f18
 
 ## Installation
 
+> [!IMPORTANT]
+> This project was 99% vibe coded using gemini 3 Pro, sonnet 4.5 and opus 4.5.
+> The model tends to identify AI text as human text more often than the reverse. 
+> The metrics can't be fully trusted though, so use everything with caution!
+
 ```bash
 # Run directly with uv
 uvx findllm document.md
 
 # With document conversion support (PDF, DOCX, PPTX, etc.)
-uvx --from 'findllm[markitdown]' findllm document.pdf
+uvx 'findllm[markitdown]' document.pdf
 
 # Or install into your environment
 pip install findllm
@@ -72,3 +77,8 @@ AI-generated text tends to follow predictable patterns that language models can 
 - **Perplexity**: How "surprised" the model is overall (lower = more predictable)
 - **Burstiness**: Variation in complexity (humans tend to write with more variation)
 - **Color Distribution**: Percentage of green/yellow/orange/red tokens
+
+### Evaluation
+Evaluation on 150 samples from https://www.kaggle.com/datasets/shanegerami/ai-vs-human-text
+
+<img width="223" height="176" alt="Image" src="https://github.com/user-attachments/assets/ffe96501-548f-4868-90d0-f8b33d55619d" />
