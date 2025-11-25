@@ -455,10 +455,10 @@ def analyze_document(
 
     # Determine assessment
     if mode == AnalysisMode.sentence:
-        if green_pct >= 60:
+        if green_pct >= 55:
             assessment = "Likely human-written"
             ai_score = 1
-        elif green_pct >= 40:
+        elif green_pct >= 35:
             assessment = "Possibly AI-generated"
             ai_score = 2
         else:
@@ -951,14 +951,14 @@ def main(
     threshold_yellow: Annotated[
         float,
         typer.Option("--threshold-yellow", help="Probability threshold for yellow"),
-    ] = 0.38,
+    ] = 0.50,
     threshold_red: Annotated[
         float, typer.Option("--threshold-red", help="Probability threshold for red")
-    ] = 0.45,
+    ] = 0.60,
     threshold_purple: Annotated[
         float,
         typer.Option("--threshold-purple", help="Probability threshold for purple"),
-    ] = 0.55,
+    ] = 0.70,
     json_output: Annotated[
         bool, typer.Option("--json", "-j", help="Output results as JSON")
     ] = False,
