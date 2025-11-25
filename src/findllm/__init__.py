@@ -442,8 +442,8 @@ def analyze_document(
     }
 
 
-class LLMCheckApp(App):
-    """Textual TUI for llmcheck results."""
+class FindLLMApp(App):
+    """Textual TUI for findllm results."""
 
     CSS = """
     #header-panel {
@@ -550,7 +550,7 @@ class LLMCheckApp(App):
 
     def on_mount(self) -> None:
         """Initialize the display."""
-        self.title = "llmcheck - AI Text Detection"
+        self.title = "findllm - AI Text Detection"
 
         # Build legend
         t = self.thresholds
@@ -888,7 +888,7 @@ def main(
         print(json.dumps(output, indent=2))
     else:
         # Launch TUI
-        tui = LLMCheckApp(
+        tui = FindLLMApp(
             results,
             {"yellow": threshold_yellow, "red": threshold_red, "purple": threshold_purple},
             text,

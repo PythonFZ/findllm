@@ -1,5 +1,5 @@
 [project]
-name = "llmcheck"
+name = "findllm"
 version = "0.1.0"
 description = "Detect AI-generated text using GPT-2 token prediction analysis"
 readme = "README.md"
@@ -14,7 +14,7 @@ dependencies = [
 ]
 
 [project.scripts]
-llmcheck = "llmcheck:app"
+findllm = "findllm:app"
 
 [build-system]
 requires = ["uv_build>=0.9.11,<0.10.0"]

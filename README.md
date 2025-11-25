@@ -1,4 +1,4 @@
-# llmcheck
+# findllm
 
 Detect AI-generated text by analyzing token prediction patterns using GPT-2.
 
@@ -6,23 +6,29 @@ Detect AI-generated text by analyzing token prediction patterns using GPT-2.
 
 ```bash
 # Run directly with uv
-uvx llmcheck document.md
+uvx findllm document.md
 
 # or install into your environment
-pip install llmcheck
+pip install findllm
 ```
 
 ## Usage
 
 ```bash
 # Analyze a file (sentence mode by default)
-llmcheck document.md
+findllm document.md
 
-# Use token-level analysis with smoothing
-llmcheck document.md --mode token
+# Use token-level analysis
+findllm document.md --mode token
 
-# Adjust smoothing window (token mode)
-llmcheck document.md --mode token --window 10
+# Chunk sentences into smaller batches (e.g., 10 tokens per chunk)
+findllm document.md --max-sentence-tokens 10
+
+# Use different aggregation methods (mean, max, l2, rmse, median)
+findllm document.md --aggregation max
+
+# JSON output for programmatic use
+findllm document.md --json
 ```
 
 ## How It Works
@@ -31,6 +37,7 @@ The tool analyzes how predictable each token in the text is according to GPT-2:
 
 - **Green** = Low probability (unpredictable, human-like)
 - **Yellow** = Moderate probability
+- **Orange** = Higher probability
 - **Red** = High probability (predictable, AI-like)
 
 AI-generated text tends to follow predictable patterns that language models can easily anticipate. Human writing is more variable and surprising.
@@ -39,4 +46,4 @@ AI-generated text tends to follow predictable patterns that language models can 
 
 - **Perplexity**: How "surprised" the model is overall (lower = more predictable)
 - **Burstiness**: Variation in complexity (humans tend to write with more variation)
-- **Color Distribution**: Percentage of green/yellow/red tokens
+- **Color Distribution**: Percentage of green/yellow/orange/red tokens
